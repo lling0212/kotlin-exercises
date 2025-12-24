@@ -6,7 +6,13 @@ import java.math.BigInteger
 import kotlin.test.assertEquals
 
 val factorial: Sequence<BigInteger> = sequence {
-    TODO()
+    var factorial = 1.toBigInteger()
+    var current = 0.toBigInteger()
+    while (true) {
+        yield(factorial)
+        current += 1.toBigInteger()
+        factorial *= current
+    }
 }
 
 class FactorialTest {

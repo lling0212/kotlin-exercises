@@ -5,7 +5,25 @@ import java.math.BigInteger
 import kotlin.test.assertEquals
 
 val primes: Sequence<BigInteger> = sequence {
-    TODO()
+    val primes = mutableListOf<BigInteger>()
+    var current = 2.toBigInteger()
+
+    fun isPrime(num : BigInteger, primes : MutableList<BigInteger>) : Boolean {
+        for (p in primes) {
+            if (num % p == 0.toBigInteger()) {
+                return false
+            }
+        }
+        return true
+    }
+
+    while (true) {
+        if (isPrime(current, primes)) {
+            yield(current)
+            primes.add(current)
+        }
+        current += 1.toBigInteger()
+    }
 }
 
 class PrimesTest {

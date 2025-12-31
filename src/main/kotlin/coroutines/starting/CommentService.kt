@@ -5,6 +5,7 @@ import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import java.lang.IllegalStateException
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -26,12 +27,37 @@ class CommentService(
         collectionKey: String,
         body: AddComment
     ) {
-        TODO()
+        val userId = userService.readUserId(token)
+        val comment = commentModelFactory.toCommentModel(userId, collectionKey, body)
+        if (!commentValidator.validate(comment.comment)) { throw CommentValidationException("Invalid comment") }
+        commentRepository.addComment(comment)
+
+        val observers = commentRepository.getCollectionKeyObservers(collectionKey)
+        observers.forEach {
+            backgroundScope.launch {
+                val email = userService.findUserById(it).email
+                emailService.notifyAboutCommentInObservedCollection(email, collectionKey, body.comment)
+            }
+        }
     }
 
     suspend fun getComments(
         collectionKey: String
-    ): CommentsCollection = TODO()
+    ): CommentsCollection = coroutineScope {
+        val comments = commentRepository.getComments(collectionKey)
+        val idToUser = comments.map { it.userId }
+            .toSet()
+            .map {id -> async { userService.findUserById(id) }}
+            .awaitAll()
+            .associateBy { it.id }
+
+        CommentsCollection(
+            collectionKey,
+             comments.map {
+                    CommentElement(it.id, collectionKey, idToUser[it.userId], it.comment, it.date)
+                }
+        )
+    }
 
     // For legacy blocking calls
     fun addCommentBlocking(
@@ -39,13 +65,29 @@ class CommentService(
         collectionKey: String,
         body: AddComment
     ) {
-        TODO()
+        runBlocking {
+            val userId = userService.readUserId(token)
+            val comment = commentModelFactory.toCommentModel(userId, collectionKey, body)
+            if (!commentValidator.validate(comment.comment)) { throw CommentValidationException("Invalid comment") }
+            commentRepository.addComment(comment)
+            val email = userService.findUserById(userId).email
+            emailService.notifyAboutCommentInObservedCollection(email, collectionKey, body.comment)
+        }
     }
 
     // For legacy blocking calls
     fun getCommentsBlocking(
         collectionKey: String
-    ): CommentsCollection = TODO()
+    ): CommentsCollection = runBlocking {
+        CommentsCollection(
+            collectionKey,
+            commentRepository.getComments(collectionKey)
+                .map { it ->
+                        val user = userService.findUserById(it.userId)
+                        CommentElement(it.id, collectionKey, user, it.comment, it.date)
+                }
+        )
+    }
 }
 
 interface CommentRepository {
